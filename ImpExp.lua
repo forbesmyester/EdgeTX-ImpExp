@@ -6,22 +6,22 @@ local function init()
 end
 
 
-function dump_table(o, escSpec, indent)
-  if type(o) == 'table' then
-     local s = '{ '
-     for k,v in pairs(o) do
-        if type(k) ~= 'number' then k = '"'..k..'"' end
-        local vout = ""
-        if type(o) == 'table' then
-            vout = dump_table(v, escSpec)
-        end
-        s = s .. '['..k..'] = ' .. vout .. ','
-     end
-     return s .. '} '
-  else
-     return tostring(o)
-  end
-end
+-- function dump_table(o, escSpec, indent)
+--   if type(o) == 'table' then
+--      local s = '{ '
+--      for k,v in pairs(o) do
+--         if type(k) ~= 'number' then k = '"'..k..'"' end
+--         local vout = ""
+--         if type(o) == 'table' then
+--             vout = dump_table(v, escSpec)
+--         end
+--         s = s .. '['..k..'] = ' .. vout .. ','
+--      end
+--      return s .. '} '
+--   else
+--      return tostring(o)
+--   end
+-- end
 
 
 local function get_model()
@@ -61,7 +61,7 @@ function serialize_model_index(getter, model)
     while tab ~= nil do
         tab = getter(line, 0)
         if tab ~= nil then
-            print(dump_table(tab))
+            -- print(dump_table(tab))
             table_insert(rr, tab)
         end
         line = line + 1
@@ -82,6 +82,7 @@ end
 
 function skip_first_spaces(str)
     local max = 1
+    local i
     for i = 1, #str do
         if string.sub(str,i,i) ~= " " then
             return string.sub(str,i)
@@ -93,6 +94,7 @@ end
 
 function table_length(tab)
     local c = 0
+    local _
     for _ in pairs(tab) do c = c + 1 end
     return c
 end
@@ -117,11 +119,10 @@ end
 
 function process_worker(str)
     local tab = {}
+    local line
     while #str > 0 do
-        local line
         line, str = to_char("\n", str)
-        local k,v = to_char("=", skip_first_spaces(line))
-        -- print("line="..line .. " !! " .. "str="..str .. " !! " .. "k="..k .. " !! " .. "v="..v)
+        local k, v = to_char("=", skip_first_spaces(line))
         if skip_first_spaces(k) == "END" then
             return tab, str
         elseif skip_first_spaces(v) == "" then
@@ -154,13 +155,12 @@ end
 
 
 function serialize_table_worker(tab, indent)
-    print("INDENT=" .. indent .. "|")
-    local k, v, vv
+    local k, v
     local lines = {}
-    for k,v in pairs(tab) do
+    for k, v in pairs(tab) do
         if type(v) == 'table' then
+            local vv, _
             lines = table_insert(lines, indent .. k)
-            print("ADD_SPACES")
             for _, vv in pairs(serialize_table_worker(v, indent .. "  ")) do
                 lines = table_insert(lines, vv)
             end
@@ -183,16 +183,18 @@ function serialize_table(tab)
     return serialize_table_worker(tab, "")
 end
 
-function print_serialized(serial)
-    for _,v in pairs(serial) do
-        print(v)
-    end
-end
+-- function print_serialized(serial)
+--     local _, v
+--     for _,v in pairs(serial) do
+--         print(v)
+--     end
+-- end
 
 
 function array_to_string(serial)
     local s = ""
     local first = true
+    local _, v
     for _,v in pairs(serial) do
         if first ~= true then
             s = s .. "\n"
@@ -319,7 +321,6 @@ function load_inputs()
     print("LOAD INPUTS")
     local line, value, input_contents
     local inputs = process(read_all("inputs.dat"))
-    -- print(array_to_string(serialize_table(process(txt))))
 
     local del_inputs = serialize_model_index_index(model_input_getter, "")
     for input, input_contents in pairs(del_inputs) do
@@ -353,8 +354,9 @@ end
 
 function load_mixes()
     print("LOAD MIXES")
-    local line, value, mix_contents
-    local mixes = process(read_all("mixes.dat"))
+    local line, value, mix_contents, mix
+    local mixes
+    mixes = process(read_all("mixes.dat"))
 
     local del_mixes = serialize_model_index_index(model_mix_getter, "")
     for mix, mix_contents in pairs(del_mixes) do
@@ -376,7 +378,7 @@ end
 
 function load_global_variable_details(f, filename)
     print("LOAD " .. filename)
-    local line, value, input_contents
+    local line, value, input_contents, idx, tab
     local inputs = process(read_all(filename))
     -- print(array_to_string(serialize_table(process(txt))))
     for idx, tab in pairs(inputs) do
@@ -421,7 +423,7 @@ local function run(event)
                 load_global_variable_details(
                     function(idx, tab)
                         print("set curve " .. idx)
-                        print(dump_table(tab))
+                        -- print(dump_table(tab))
                         local r = model.setCurve(idx - 1, tab)
                         print("R=" .. r)
                     end,
@@ -464,7 +466,7 @@ local function run(event)
 
     if mode == 2 then
         print(sel_1 .. "/" .. sel_0)
-        f = funcs[sel_1 + 1][sel_0 + 1]
+        local f = funcs[sel_1 + 1][sel_0 + 1]
         print("call f ++" .. sel_1 .. "/" .. sel_0)
         print("t1=" .. table_length(funcs[1]))
         print("t2=" .. table_length(funcs[2]))
