@@ -29,7 +29,7 @@ local function get_model()
 end
 
 
-function serialize_model_index_index(getter, model)
+function serialize_model_index_index(getter, count)
     local input = 0
     local r = {}
     while true do
@@ -39,32 +39,39 @@ function serialize_model_index_index(getter, model)
         while tab ~= nil do
             tab = getter(input, line)
             if tab ~= nil then
+                print("CONT " .. input .. " " .. line)
                 table_insert(rr, tab)
                 -- print("input="..input.."/".."line="..line.."  "..dump_table(tab))
             end
             line = line + 1
         end
-        if table_length(rr) == 0 then
+        if (count == -1) and (table_length(rr) == 0) then
             return r
         end
         table_insert(r, rr)
         input = input + 1
+        if (input >= count) then
+            return r
+        end
     end
     return r
 end
 
 
-function serialize_model_index(getter, model)
+function serialize_model_index(getter, model, count)
     local rr = {}
     local tab = true
     local line = 0
-    while tab ~= nil do
+    while (count > -1) and (tab ~= nil) do
         tab = getter(line, 0)
         if tab ~= nil then
             -- print(dump_table(tab))
             table_insert(rr, tab)
         end
         line = line + 1
+        if (line >= count) then
+            return rr
+        end
     end
     return rr
 end
@@ -309,8 +316,8 @@ function model_global_variable_details_getter(index_1, zero_or_nil_return)
     )
 end
 
-function dump_model_index_index(filename, getter)
-    write_all(filename, serialize_table(serialize_model_index_index(getter, "")))
+function dump_model_index_index(filename, getter, count)
+    write_all(filename, serialize_table(serialize_model_index_index(getter, count)))
 end
 
 function dump_model_index(filename, getter)
@@ -322,7 +329,7 @@ function load_inputs()
     local line, value, input_contents
     local inputs = process(read_all("inputs.dat"))
 
-    local del_inputs = serialize_model_index_index(model_input_getter, "")
+    local del_inputs = serialize_model_index_index(model_input_getter, 32)
     for input, input_contents in pairs(del_inputs) do
         print("" .. input .. "=" .. table_length(input_contents))
         local i = table_length(input_contents)
@@ -358,7 +365,7 @@ function load_mixes()
     local mixes
     mixes = process(read_all("mixes.dat"))
 
-    local del_mixes = serialize_model_index_index(model_mix_getter, "")
+    local del_mixes = serialize_model_index_index(model_mix_getter, 32)
     for mix, mix_contents in pairs(del_mixes) do
         print("" .. mix .. "=" .. table_length(mix_contents))
         local i = table_length(mix_contents)
@@ -400,15 +407,15 @@ end
 
 local function run(event)
     local write_funcs = {
-            function() return dump_model_index_index("inputs.dat", model_input_getter) end,
-            function() return dump_model_index_index("mixes.dat", model_mix_getter) end,
-            function() return dump_model_index("outputs.dat", model_output_getter) end,
-            function() return dump_model_index("curves.dat", model_curve_getter) end,
-            function() return dump_model_index_index("global_variable_values.dat", model_global_variable_values_getter) end,
-            function() return dump_model_index("custom_functions.dat", model_custom_function_getter) end,
-            function() return dump_model_index("logical_switches.dat", model_logical_switch_getter) end,
-            function() return dump_model_index("flight_modes.dat", model_flight_mode_getter) end,
-            function() return dump_model_index("global_variable_details.dat", model_global_variable_details_getter) end,
+            function() return dump_model_index_index("inputs.dat", model_input_getter, 32) end,
+            function() return dump_model_index_index("mixes.dat", model_mix_getter, 32) end,
+            function() return dump_model_index("outputs.dat", model_output_getter, 32) end,
+            function() return dump_model_index("curves.dat", model_curve_getter, 32) end,
+            function() return dump_model_index_index("global_variable_values.dat", model_global_variable_values_getter, 9) end,
+            function() return dump_model_index("custom_functions.dat", model_custom_function_getter, 64) end,
+            function() return dump_model_index("logical_switches.dat", model_logical_switch_getter, 64) end,
+            function() return dump_model_index("flight_modes.dat", model_flight_mode_getter, 8) end,
+            function() return dump_model_index("global_variable_details.dat", model_global_variable_details_getter, 9) end,
         }
     local read_funcs = {
             load_inputs,
