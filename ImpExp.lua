@@ -6,22 +6,22 @@ local function init()
 end
 
 
--- function dump_table(o, escSpec, indent)
---   if type(o) == 'table' then
---      local s = '{ '
---      for k,v in pairs(o) do
---         if type(k) ~= 'number' then k = '"'..k..'"' end
---         local vout = ""
---         if type(o) == 'table' then
---             vout = dump_table(v, escSpec)
---         end
---         s = s .. '['..k..'] = ' .. vout .. ','
---      end
---      return s .. '} '
---   else
---      return tostring(o)
---   end
--- end
+function dump_table(o, escSpec, indent)
+  if type(o) == 'table' then
+     local s = '{ '
+     for k,v in pairs(o) do
+        if type(k) ~= 'number' then k = '"'..k..'"' end
+        local vout = ""
+        if type(o) == 'table' then
+            vout = dump_table(v, escSpec)
+        end
+        s = s .. '['..k..'] = ' .. vout .. ','
+     end
+     return s .. '} '
+  else
+     return tostring(o)
+  end
+end
 
 
 local function get_model()
@@ -324,25 +324,43 @@ function dump_model_index(filename, getter)
     write_all(filename, serialize_table(serialize_model_index(getter, "")))
 end
 
-function load_inputs()
+function del_inputs()
     print("LOAD INPUTS")
-    local line, value, input_contents
-    local inputs = process(read_all("inputs.dat"))
-
+    local input, input_contents
     local del_inputs = serialize_model_index_index(model_input_getter, 32)
     for input, input_contents in pairs(del_inputs) do
         print("" .. input .. "=" .. table_length(input_contents))
         local i = table_length(input_contents)
         while i > 0 do
-                print("model.deleteInput(" .. input - 1 .. ", " .. i - 1 .. ")")
-                model.deleteInput(input - 1, i - 1)
-		i = i - 1
+            print("model.deleteInput(" .. input - 1 .. ", " .. i - 1 .. ")")
+            model.deleteInput(input - 1, i - 1)
+    		i = i - 1
         end
     end
+end
+
+function load_inputs()
+    print("LOAD INPUTS")
+    local input, line, value, input_contents
+    local inputs = process(read_all("inputs.dat"))
+
+    del_inputs()
 
     for input, input_contents in pairs(inputs) do
         for line, value in pairs(input_contents) do
             model.insertInput(input - 1, line - 1, value)
+        end
+    end
+end
+
+function del_global_variable_value()
+    print("DEL GLOBAL_VARIABLE_VALUES")
+    local line, value, input_contents
+    local inputs = serialize_model_index_index(model_global_variable_values_getter, 9)
+
+    for input, input_contents in pairs(inputs) do
+        for line, value in pairs(input_contents) do
+            model.setGlobalVariable(input - 1, line - 1, 0)
         end
     end
 end
@@ -359,22 +377,30 @@ function load_global_variable_value()
     end
 end
 
-function load_mixes()
-    print("LOAD MIXES")
-    local line, value, mix_contents, mix
-    local mixes
-    mixes = process(read_all("mixes.dat"))
+function del_mixes()
+    print("DEL MIXES")
+    local mix, mix_contents, mix
 
     local del_mixes = serialize_model_index_index(model_mix_getter, 32)
     for mix, mix_contents in pairs(del_mixes) do
         print("" .. mix .. "=" .. table_length(mix_contents))
         local i = table_length(mix_contents)
         while i > 0 do
-                print("model.deleteMix(" .. mix - 1 .. ", " .. i - 1 .. ")")
-                model.deleteMix(mix - 1, i - 1)
-		i = i - 1
+            print("model.deleteMix(" .. mix - 1 .. ", " .. i - 1 .. ")")
+            model.deleteMix(mix - 1, i - 1)
+    		i = i - 1
         end
     end
+
+end
+
+function load_mixes()
+    print("LOAD MIXES")
+    local line, value, mix, mix_contents, mix
+    local mixes
+    mixes = process(read_all("mixes.dat"))
+
+    del_mixes()
 
     for mix, mix_contents in pairs(mixes) do
         for line, value in pairs(mix_contents) do
@@ -404,8 +430,55 @@ local function maybe_to_upper(b, s)
     return s
 end
 
+function get_delete_model_index_f(func, max_index)
+    local function deleter()
+        local i = 0
+        while i < max_index do
+            local r = func(i, {})
+            -- print("R=" .. r .. " for " .. i)
+            i = i + 1
+        end
+    end
+    return deleter
+end
+
 
 local function run(event)
+    local delete_funcs = {
+            del_inputs,
+            del_mixes,
+            get_delete_model_index_f(
+                function(i) model.setOutput(i, {}) end,
+                32
+            ),
+            get_delete_model_index_f( -- DOES DELETE FIRST???
+                function(i)
+                    local tab = {
+                        points = 5,
+                        y = { 0, 0, 0, 0, 0 },
+                        type = 0,
+                        smooth = false,
+                        name = "",
+                    }
+                    return model.setCurve(i, tab)
+                end,
+                32
+            ),
+            del_global_variable_value,
+            get_delete_model_index_f(
+                function(i) model.setCustomFunction(i, {}) end,
+                9
+            ),
+            get_delete_model_index_f(
+                function(i) model.setLogicalSwitch(i, {}) end,
+                64
+            ),
+            function() model.deleteFlightModes() end,
+            get_delete_model_index_f(
+                function(i) model.setGlobalVariableDetails(i, {}) end,
+                9
+            ),
+    }
     local write_funcs = {
             function() return dump_model_index_index("inputs.dat", model_input_getter, 32) end,
             function() return dump_model_index_index("mixes.dat", model_mix_getter, 32) end,
@@ -464,7 +537,7 @@ local function run(event)
             end,
         }
 
-    local funcs = { write_funcs, read_funcs }
+    local funcs = { write_funcs, read_funcs, delete_funcs }
 
 
     if event == EVT_ENTER_BREAK then
@@ -508,7 +581,7 @@ local function run(event)
     end
 
     if mode == 1 then
-        local max_menu = 1
+        local max_menu = 2
         if event == EVT_ROT_LEFT then
             sel_1 = sel_1 - 1
         end
@@ -534,8 +607,9 @@ local function run(event)
     lcd.drawText(64, 18, maybe_to_upper(sel_0 == 7, 'flight modes'), SMLSIZE)
     lcd.drawText(64, 27, maybe_to_upper(sel_0 == 8, 'gvar details'), SMLSIZE)
 
-    lcd.drawText(12, 55, maybe_to_upper((mode == 1) and (sel_1 == 0), '[export]'), SMLSIZE)
-    lcd.drawText(76, 55, maybe_to_upper((mode == 1) and (sel_1 == 1), '[import]'), SMLSIZE)
+    lcd.drawText(12, 55, maybe_to_upper((mode == 1) and (sel_1 == 0), '[exp]'), SMLSIZE)
+    lcd.drawText(44, 55, maybe_to_upper((mode == 1) and (sel_1 == 1), '[imp]'), SMLSIZE)
+    lcd.drawText(76, 55, maybe_to_upper((mode == 1) and (sel_1 == 2), '[del]'), SMLSIZE)
 
     -- todo: timer
 
